@@ -1,31 +1,44 @@
 const User = require("../models/User");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
+const { error, success } = require("../utils/responseWrapper");
 
 const signupController = async (req, res) => {
     try {
-        const { email, password } = req.body;
-        if (!email || !password) {
-            return res.status(400).send("All fields are required");
+        const { name, email, password } = req.body;
+        if (!email || !password || !name) {
+            return res.send(error(400, "All fields are required"));
         }
-
-        //// checking the email is already registered or not.
+        
         const oldUser = await User.findOne({ email });
         if (oldUser) {
-            return res.status(409).send("Sorry, a user with this email is already registered");
+            return res.send(error(409, "Sorry, a user with this email is already registered"));
         }
-
+        
         //// saving user credentials with encrypted password
         const hashPassword = await bcrypt.hash(password, 10);
         const newUser = await User.create({
+            name,
             email,
             password: hashPassword
         })
-
-        res.status(201).send(newUser);
-
-    } catch (error) {
-        console.log("error in signupController");
+        //// generating authToken for user
+        const authToken = generateAccessToken({
+            _id: newUser._id,
+        });
+        //// generating refreshToken for user
+        const refreshToken = generateRefreshToken({
+            _id: newUser._id,
+        });
+        res.cookie("refreshToken", refreshToken, {
+            httpOnly: true,
+            secure: true
+        })
+        
+        return res.send(success(201, {newUser, authToken}));
+        
+    } catch (err) {
+        console.log("Major error in signupController", err);
     }
 }
 
@@ -33,58 +46,63 @@ const loginController = async (req, res) => {
     try {
         const { email, password } = req.body;
         if (!email || !password) {
-            return res.status(400).send("All fields are required.");
+            return res.send(error(400, "All fields are required."));
         }
 
         //// checking the email is registered or not.
         const user = await User.findOne({ email });
         if (!user) {
-            return res.status(404).send("User is not registered.");
+            return res.send(error(404, "User is not registered."));            
         }
 
         //// comparing the password
         const matchedPassword = await bcrypt.compare(password, user.password);
         if (!matchedPassword) {
-            return res.status(401).send("Incorrect Password");
+            return res.send(error(401, "Incorrect Password"))
         }
 
         //// generating authToken for user
         const authToken = generateAccessToken({
             _id: user._id,
         });
-        //// generating authToken for user
+        //// generating refreshToken for user
         const refreshToken = generateRefreshToken({
             _id: user._id,
         });
-        res.send({ authToken, refreshToken });
-    } catch (error) {
-        console.log("error in loginController");
+        res.cookie("refreshToken", refreshToken, {
+            httpOnly: true,
+            secure: true
+        })
+        return res.send(success(200, {authToken}));
+    } catch (err) {
+        console.log("error in loginController", err);
     }
 }
 
 //// here we check the refreshToken's validity and if it's expire then generate another one
 const refreshAccessTokenConteroller = (req, res) => {
-    const { refreshToken } = req.body;
-    if (!refreshToken) {
-        return res.status(401).send("RefreshToken is required");
+    const cookies = req.cookies;
+    if (!cookies.refreshToken) {
+        return res.send(error(401, "RefreshToken in cookie is required."));
     }
 
+    const refreshToken = cookies.refreshToken;
     try {
         const verifiedToken = jwt.verify(refreshToken, process.env.JWT_REFRESH_TOKEN_PRIVATE_KEY);
 
         const _id = verifiedToken._id;
-        const accessToken = generateAccessToken({ _id });
+        const authToken = generateAccessToken({ _id });
 
-        return res.status(201).json({ accessToken })
-    } catch (error) {
-        return res.status(401).send("invalid authorization refresh key");
+        return res.send(success(201, {authToken}));
+    } catch (err) {
+        return res.send(error(401, "invalid authorization refresh key"));
     }
 }
 
 //// internal functions
 const generateAccessToken = (credential) => {
     const token = jwt.sign(credential, process.env.JWT_ACCESS_TOKEN_PRIVATE_KEY, {
-        expiresIn: "60m"
+        expiresIn: "20s"
     });
     return token;
 }
