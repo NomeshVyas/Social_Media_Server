@@ -9,36 +9,36 @@ const signupController = async (req, res) => {
         if (!email || !password || !name) {
             return res.send(error(400, "All fields are required"));
         }
-        
+
         const oldUser = await User.findOne({ email });
         if (oldUser) {
             return res.send(error(409, "Sorry, a user with this email is already registered"));
         }
-        
+
         //// saving user credentials with encrypted password
         const hashPassword = await bcrypt.hash(password, 10);
-        const newUser = await User.create({
+        const user = await User.create({
             name,
             email,
             password: hashPassword
         })
         //// generating authToken for user
         const authToken = generateAccessToken({
-            _id: newUser._id,
+            _id: user._id,
         });
         //// generating refreshToken for user
         const refreshToken = generateRefreshToken({
-            _id: newUser._id,
+            _id: user._id,
         });
         res.cookie("refreshToken", refreshToken, {
             httpOnly: true,
             secure: true
         })
-        
-        return res.send(success(201, {newUser, authToken}));
-        
+
+        return res.send(success(201, { message: "user created successfully", authToken }));
+
     } catch (err) {
-        console.log("Major error in signupController", err);
+        console.log(error(500, err.message));
     }
 }
 
@@ -50,9 +50,9 @@ const loginController = async (req, res) => {
         }
 
         //// checking the email is registered or not.
-        const user = await User.findOne({ email });
+        const user = await User.findOne({ email }).select("+password");
         if (!user) {
-            return res.send(error(404, "User is not registered."));            
+            return res.send(error(404, "User is not registered."));
         }
 
         //// comparing the password
@@ -73,9 +73,23 @@ const loginController = async (req, res) => {
             httpOnly: true,
             secure: true
         })
-        return res.send(success(200, {authToken}));
+        return res.send(success(200, { authToken }));
     } catch (err) {
-        console.log("error in loginController", err);
+        console.log(error(500, err.message));
+    }
+}
+
+const logOutController = (req, res) => {
+    try {
+        res.clearCookie('refreshToken', {
+            httpOnly: true,
+            secure: true
+        })
+
+        return res.send(success(200, 'User logged out'))
+
+    } catch (err) {
+        res.send(error(500, err.message))
     }
 }
 
@@ -93,16 +107,16 @@ const refreshAccessTokenConteroller = (req, res) => {
         const _id = verifiedToken._id;
         const authToken = generateAccessToken({ _id });
 
-        return res.send(success(201, {authToken}));
+        return res.send(success(201, { authToken }));
     } catch (err) {
-        return res.send(error(401, "invalid authorization refresh key"));
+        console.log(error(500, err.message));
     }
 }
 
 //// internal functions
 const generateAccessToken = (credential) => {
     const token = jwt.sign(credential, process.env.JWT_ACCESS_TOKEN_PRIVATE_KEY, {
-        expiresIn: "20s"
+        expiresIn: "1d"
     });
     return token;
 }
@@ -116,5 +130,6 @@ const generateRefreshToken = (credential) => {
 module.exports = {
     signupController,
     loginController,
+    logOutController,
     refreshAccessTokenConteroller
 }

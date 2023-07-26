@@ -19,8 +19,31 @@ const UserSchema = mongoose.Schema({
     },
     password: {
         type: String,
-        required: true
-    }
+        required: true,
+        select: false
+    },
+    avatar: {
+        publicId: String,
+        url: String
+    },
+    followers: [
+        {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'user'
+        }
+    ],
+    following: [
+        {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'user'
+        }
+    ],
+    posts: [
+        {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'post'
+        }
+    ]
 })
 
 module.exports = mongoose.model('user', UserSchema);

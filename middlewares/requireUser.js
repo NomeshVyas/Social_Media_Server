@@ -12,7 +12,7 @@ module.exports = async (req, res, next) => {
 
     try {
         const verifiedToken = jwt.verify(accessToken, process.env.JWT_ACCESS_TOKEN_PRIVATE_KEY);
-        req._id = verifiedToken._id
+        req._id = verifiedToken._id;
     } catch (err) {
         console.log(err);
         return res.send(error(401, "invalid authorization access key"))
