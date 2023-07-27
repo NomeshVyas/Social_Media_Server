@@ -12,6 +12,10 @@ const createPostController = async (req, res) => {
         const { caption } = req.body;
         const owner = req._id;
 
+        if (!caption) {
+            return res.send(error(400, "caption is required"));
+        }
+        
         const user = await User.findById(req._id);
 
         const post = await Post.create({
@@ -97,7 +101,6 @@ const deletePost = async (req, res) => {
         if (post.owner.toString() !== curUserId) {
             return res.send(error(403, "Only owner can delete their post"));
         }
-
         
         const index = curUser.posts.indexOf(postId);
         curUser.posts.splice(index, 1);
@@ -106,7 +109,6 @@ const deletePost = async (req, res) => {
         await Post.findByIdAndDelete(postId);
 
         return res.send(success(200, "Post Deleted Successfully"));
-
 
     } catch (err) {
         return res.send(error(500, err.message))
